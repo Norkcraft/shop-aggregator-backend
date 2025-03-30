@@ -8,7 +8,7 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
-const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY;
+const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY; // ✅ Use environment variable
 
 // ✅ Test Route
 app.get("/", (req, res) => {
@@ -22,31 +22,29 @@ app.get("/api/amazon", async (req, res) => {
     const page = req.query.page || 1; // Pagination support
     if (!query) return res.status(400).json({ error: "Query is required" });
 
-    // ✅ ScraperAPI URL with autoparse=true & pagination
+    // ✅ Correct ScraperAPI URL with API Key & Proper Formatting
     const apiUrl = `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&autoparse=true&url=https://www.amazon.com/s?k=${query}&page=${page}`;
 
-    // ✅ Make the request with User-Agent header
+    // ✅ Make request with headers to avoid detection
     const response = await axios.get(apiUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
       }
     });
 
-    // ✅ Check if we got results
-    if (!response.data || !response.data.results || response.data.results.length === 0) {
+    // ✅ Check if products exist in response
+    if (!response.data || !response.data.products || response.data.products.length === 0) {
       return res.status(404).json({ error: "No products found" });
     }
 
-    // ✅ Format the product data with filtering support
-    const products = response.data.results
-      .map((product) => ({
-        title: product.title,
-        price: typeof product.price === "string" ? product.price.replace(/[^0-9.]/g, "") : "N/A", // ✅ Ensure price is a string before replacing
-        image: product.image,
-        link: product.url,
-        rating: product.rating || "N/A"
-      }))
-      .filter(product => product.price !== "N/A" && product.price.trim() !== ""); // ✅ Filter out empty prices
+    // ✅ Extract and format product data
+    const products = response.data.products.map((product) => ({
+      title: product.title || "No title",
+      price: product.price ? product.price.replace(/[^0-9.]/g, "") : "N/A", // ✅ Ensure numeric price
+      image: product.image || "https://via.placeholder.com/150",
+      link: product.url || "#",
+      rating: product.rating || "N/A"
+    }));
 
     res.json({ success: true, products, page });
   } catch (error) {
