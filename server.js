@@ -36,10 +36,17 @@ app.get("/api/amazon", async (req, res) => {
       },
     });
 
+    console.log("API Response Data:", response.data); // ✅ Log response for debugging
+
+    // ✅ Check if data exists and is an array
+    if (!response.data || !Array.isArray(response.data.data)) {
+      return res.status(500).json({ error: "Unexpected API response format", data: response.data });
+    }
+
     // ✅ Extract and format product data
     const products = response.data.data.map((product) => ({
       title: product.title || "No title",
-      price: product.price ? product.price.value : "N/A",
+      price: product.price?.value || "N/A",
       image: product.main_image || "https://via.placeholder.com/150",
       link: product.detail_page_url || "#",
       rating: product.rating ? `${product.rating} stars` : "No rating",
@@ -47,8 +54,8 @@ app.get("/api/amazon", async (req, res) => {
 
     res.json({ success: true, products, page });
   } catch (error) {
-    console.error("API Error:", error.message);
-    res.status(500).json({ error: "Failed to fetch products" });
+    console.error("API Error:", error.response?.data || error.message);
+    res.status(500).json({ error: "Failed to fetch products", details: error.response?.data });
   }
 });
 
