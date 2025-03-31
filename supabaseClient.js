@@ -1,19 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 
-// Load environment variables
 dotenv.config();
-
-// Debugging: Check if environment variables are loaded
-console.log("Backend Supabase URL:", process.env.SUPABASE_URL);
-console.log("Backend Supabase Key:", process.env.SUPABASE_ANON_KEY);
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
-// Ensure environment variables exist
+// Debugging: Check if values exist
+console.log("Backend Supabase URL:", supabaseUrl);
+console.log("Backend Supabase Key:", supabaseAnonKey);
+
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("Supabase URL or Anon Key is missing in the backend!");
+  throw new Error("Supabase URL or Anon Key is missing in backend! Check your .env file.");
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);

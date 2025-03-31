@@ -4,58 +4,95 @@ const axios = require("axios");
 const cors = require("cors");
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: "*", // allow all origins for testing; you may restrict this later
+}));
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
-const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY; // ✅ Use environment variable
 
 // ✅ Test Route
 app.get("/", (req, res) => {
   res.send("Backend is running...");
 });
 
-// ✅ Amazon Product Scraper Route (Using RapidAPI)
-app.get("/api/amazon", async (req, res) => {
+// ✅ Products Route (Using Fakestore API with 20% profit margin)
+app.get("/api/products", async (req, res) => {
   try {
-    const query = req.query.q;
-    const page = req.query.page || 1;
+    const query = req.query.q || "";
+    
+    // Fetch products from Fakestore API
+    const response = await axios.get("https://fakestoreapi.com/products");
+    let products = response.data; // this should be an array
 
-    if (!query) {
-      return res.status(400).json({ error: "Query is required" });
-    }
-
-    // ✅ RapidAPI URL
-    const apiUrl = `https://real-time-amazon-data.p.rapidapi.com/search?query=${encodeURIComponent(query)}&page=${page}&country=US&sort_by=RELEVANCE&product_condition=ALL&is_prime=false&deals_and_discounts=NONE`;
-
-    // ✅ API Request
-    const response = await axios.get(apiUrl, {
-      headers: {
-        "x-rapidapi-host": "real-time-amazon-data.p.rapidapi.com",
-        "x-rapidapi-key": RAPIDAPI_KEY, // ✅ Use environment variable
-      },
-    });
-
-    console.log("API Response Data:", response.data); // ✅ Log response for debugging
-
-    // ✅ Check if data exists and is an array
-    if (!response.data || !Array.isArray(response.data.data)) {
-      return res.status(500).json({ error: "Unexpected API response format", data: response.data });
-    }
-
-    // ✅ Extract and format product data
-    const products = response.data.data.map((product) => ({
-      title: product.title || "No title",
-      price: product.price?.value || "N/A",
-      image: product.main_image || "https://via.placeholder.com/150",
-      link: product.detail_page_url || "#",
-      rating: product.rating ? `${product.rating} stars` : "No rating",
+    // Add 20% profit margin to each product's price
+    products = products.map((product) => ({
+      ...product,
+      price: (parseFloat(product.price) * 1.2).toFixed(2),
     }));
 
-    res.json({ success: true, products, page });
+    // If a search query is provided, filter products by title (case-insensitive)
+    if (query) {
+      const lowerQuery = query.toLowerCase();
+      products = products.filter((product) =>
+        product.title.toLowerCase().includes(lowerQuery)
+      );
+    }
+
+    res.json({ success: true, products });
   } catch (error) {
-    console.error("API Error:", error.response?.data || error.message);
-    res.status(500).json({ error: "Failed to fetch products", details: error.response?.data });
+    console.error("Error fetching products:", error.message);
+    res.status(500).json({ error: "Failed to fetch products", details: error.message });
+  }
+});
+
+// (Optional) Order Purchase Simulation Route
+// This route simulates placing an order to a supplier.
+// You can expand this logic later for real order automation.
+app.post("/api/order", async (req, res) => {
+  try {
+    const { userId, productId, quantity, shippingAddress } = req.body;
+    if (!userId || !productId || !quantity || !shippingAddress) {
+      return res.status(400).json({ error: "Missing order details" });
+    }
+
+    // Fetch product details from Fakestore API
+    const productResponse = await axios.get(`https://fakestoreapi.com/products/${productId}`);
+    const product = productResponse.data;
+    if (!product) return res.status(404).json({ error: "Product not found" });
+
+    // Simulate placing an order on the supplier's website (Fakestore API example)
+    const supplierOrder = await axios.post("https://fakestoreapi.com/carts", {
+      userId,
+      date: new Date().toISOString(),
+      products: [{ productId, quantity }],
+    });
+
+    // Calculate the total amount with a 20% profit margin
+    const totalAmount = (parseFloat(product.price) * 1.2 * quantity).toFixed(2);
+
+    // Build an order object to return
+    const order = {
+      orderId: supplierOrder.data.id, // use the supplier order ID as our order ID
+      userId,
+      productId,
+      quantity,
+      totalAmount,
+      status: "Processing",
+      shippingAddress,
+    };
+
+    res.status(201).json({
+      success: true,
+      message: "Order placed successfully!",
+      order,
+    });
+  } catch (error) {
+    console.error("Order placement failed:", error.response?.data || error.message);
+    res.status(500).json({
+      error: "Order placement failed",
+      details: error.response?.data || error.message,
+    });
   }
 });
 
