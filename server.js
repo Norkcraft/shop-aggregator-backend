@@ -4,9 +4,7 @@ const axios = require("axios");
 const cors = require("cors");
 
 const app = express();
-app.use(cors({
-  origin: "*", // allow all origins for testing; you may restrict this later
-}));
+app.use(cors({ origin: "*" })); // Allow all origins for now
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
@@ -16,26 +14,30 @@ app.get("/", (req, res) => {
   res.send("Backend is running...");
 });
 
-// ✅ Products Route (Using Fakestore API with 20% profit margin)
+// ✅ Products Route (Fetch from Fakestore API with 20% profit margin)
 app.get("/api/products", async (req, res) => {
   try {
     const query = req.query.q || "";
-    
-    // Fetch products from Fakestore API
-    const response = await axios.get("https://fakestoreapi.com/products");
-    let products = response.data; // this should be an array
 
-    // Add 20% profit margin to each product's price
+    // 🔹 Fetch all products from FakeStore API
+    const response = await axios.get("https://fakestoreapi.com/products");
+    let products = response.data;
+
+    // 🔹 Add 20% profit margin
     products = products.map((product) => ({
-      ...product,
-      price: (parseFloat(product.price) * 1.2).toFixed(2),
+      id: product.id,
+      title: product.title,
+      price: (parseFloat(product.price) * 1.2).toFixed(2), // ✅ 20% markup
+      image: product.image,
+      category: product.category,
+      description: product.description,
+      link: `https://fakestoreapi.com/products/${product.id}`, // Direct product link
     }));
 
-    // If a search query is provided, filter products by title (case-insensitive)
+    // 🔹 If search query is provided, filter products
     if (query) {
-      const lowerQuery = query.toLowerCase();
       products = products.filter((product) =>
-        product.title.toLowerCase().includes(lowerQuery)
+        product.title.toLowerCase().includes(query.toLowerCase())
       );
     }
 
@@ -46,9 +48,7 @@ app.get("/api/products", async (req, res) => {
   }
 });
 
-// (Optional) Order Purchase Simulation Route
-// This route simulates placing an order to a supplier.
-// You can expand this logic later for real order automation.
+// ✅ Order Placement Route (Simulated Purchase)
 app.post("/api/order", async (req, res) => {
   try {
     const { userId, productId, quantity, shippingAddress } = req.body;
@@ -56,24 +56,24 @@ app.post("/api/order", async (req, res) => {
       return res.status(400).json({ error: "Missing order details" });
     }
 
-    // Fetch product details from Fakestore API
+    // 🔹 Fetch product details
     const productResponse = await axios.get(`https://fakestoreapi.com/products/${productId}`);
     const product = productResponse.data;
     if (!product) return res.status(404).json({ error: "Product not found" });
 
-    // Simulate placing an order on the supplier's website (Fakestore API example)
+    // 🔹 Place order in FakeStoreAPI (simulated cart system)
     const supplierOrder = await axios.post("https://fakestoreapi.com/carts", {
       userId,
       date: new Date().toISOString(),
       products: [{ productId, quantity }],
     });
 
-    // Calculate the total amount with a 20% profit margin
+    // 🔹 Calculate total amount with 20% profit
     const totalAmount = (parseFloat(product.price) * 1.2 * quantity).toFixed(2);
 
-    // Build an order object to return
+    // 🔹 Order Response
     const order = {
-      orderId: supplierOrder.data.id, // use the supplier order ID as our order ID
+      orderId: supplierOrder.data.id, // Use supplier order ID
       userId,
       productId,
       quantity,
@@ -88,11 +88,8 @@ app.post("/api/order", async (req, res) => {
       order,
     });
   } catch (error) {
-    console.error("Order placement failed:", error.response?.data || error.message);
-    res.status(500).json({
-      error: "Order placement failed",
-      details: error.response?.data || error.message,
-    });
+    console.error("Order placement failed:", error.message);
+    res.status(500).json({ error: "Order placement failed", details: error.message });
   }
 });
 
