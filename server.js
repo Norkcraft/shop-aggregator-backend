@@ -8,42 +8,41 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
-const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY; // ✅ Use environment variable
+const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY; // ✅ Use environment variable
 
 // ✅ Test Route
 app.get("/", (req, res) => {
   res.send("Backend is running...");
 });
 
-// ✅ Amazon Product Scraper Route
+// ✅ Amazon Product Scraper Route (Using RapidAPI)
 app.get("/api/amazon", async (req, res) => {
   try {
     const query = req.query.q;
-    const page = req.query.page || 1; // Pagination support
-    if (!query) return res.status(400).json({ error: "Query is required" });
+    const page = req.query.page || 1;
 
-    // ✅ Correct ScraperAPI URL with API Key & Proper Formatting
-    const apiUrl = `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&autoparse=true&url=https://www.amazon.com/s?k=${query}&page=${page}`;
-
-    // ✅ Make request with headers to avoid detection
-    const response = await axios.get(apiUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
-      }
-    });
-
-    // ✅ Check if products exist in response
-    if (!response.data || !response.data.products || response.data.products.length === 0) {
-      return res.status(404).json({ error: "No products found" });
+    if (!query) {
+      return res.status(400).json({ error: "Query is required" });
     }
 
+    // ✅ RapidAPI URL
+    const apiUrl = `https://real-time-amazon-data.p.rapidapi.com/search?query=${encodeURIComponent(query)}&page=${page}&country=US&sort_by=RELEVANCE&product_condition=ALL&is_prime=false&deals_and_discounts=NONE`;
+
+    // ✅ API Request
+    const response = await axios.get(apiUrl, {
+      headers: {
+        "x-rapidapi-host": "real-time-amazon-data.p.rapidapi.com",
+        "x-rapidapi-key": RAPIDAPI_KEY, // ✅ Use environment variable
+      },
+    });
+
     // ✅ Extract and format product data
-    const products = response.data.products.map((product) => ({
+    const products = response.data.data.map((product) => ({
       title: product.title || "No title",
-      price: product.price ? product.price.replace(/[^0-9.]/g, "") : "N/A", // ✅ Ensure numeric price
-      image: product.image || "https://via.placeholder.com/150",
-      link: product.url || "#",
-      rating: product.rating || "N/A"
+      price: product.price ? product.price.value : "N/A",
+      image: product.main_image || "https://via.placeholder.com/150",
+      link: product.detail_page_url || "#",
+      rating: product.rating ? `${product.rating} stars` : "No rating",
     }));
 
     res.json({ success: true, products, page });
