@@ -8,40 +8,57 @@ app.use(cors({ origin: "*" })); // Allow all origins for now
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
+const FAKESTORE_API = "https://fakestoreapi.com/products"; // ✅ Base API URL
 
 // ✅ Test Route
 app.get("/", (req, res) => {
   res.send("Backend is running...");
 });
 
-// ✅ Products Route (Fetch from Fakestore API with 20% profit margin)
+// ✅ Products Route (Fetch all or single product)
 app.get("/api/products", async (req, res) => {
   try {
-    const query = req.query.q || "";
+    const { q, id } = req.query;
 
-    // 🔹 Fetch all products from FakeStore API
-    const response = await axios.get("https://fakestoreapi.com/products");
-    let products = response.data;
+    // 🔹 Fetch all products if no ID is provided
+    if (!id) {
+      const response = await axios.get(FAKESTORE_API);
+      let products = response.data.map((product) => ({
+        id: product.id,
+        title: product.title,
+        price: (parseFloat(product.price) * 1.2).toFixed(2), // ✅ 20% markup
+        image: product.image,
+        category: product.category,
+        description: product.description,
+        link: `${FAKESTORE_API}/${product.id}`, // Direct product link
+      }));
 
-    // 🔹 Add 20% profit margin
-    products = products.map((product) => ({
-      id: product.id,
-      title: product.title,
-      price: (parseFloat(product.price) * 1.2).toFixed(2), // ✅ 20% markup
-      image: product.image,
-      category: product.category,
-      description: product.description,
-      link: `https://fakestoreapi.com/products/${product.id}`, // Direct product link
-    }));
+      // 🔹 Filter products based on search query
+      if (q) {
+        products = products.filter((product) =>
+          product.title.toLowerCase().includes(q.toLowerCase())
+        );
+      }
 
-    // 🔹 If search query is provided, filter products
-    if (query) {
-      products = products.filter((product) =>
-        product.title.toLowerCase().includes(query.toLowerCase())
-      );
+      return res.json({ success: true, products });
     }
 
-    res.json({ success: true, products });
+    // 🔹 Fetch single product by ID
+    const productResponse = await axios.get(`${FAKESTORE_API}/${id}`);
+    if (!productResponse.data) {
+      return res.status(404).json({ success: false, error: "Product not found" });
+    }
+
+    const product = {
+      id: productResponse.data.id,
+      title: productResponse.data.title,
+      price: (parseFloat(productResponse.data.price) * 1.2).toFixed(2), // ✅ 20% markup
+      image: productResponse.data.image,
+      category: productResponse.data.category,
+      description: productResponse.data.description,
+    };
+
+    return res.json({ success: true, product });
   } catch (error) {
     console.error("Error fetching products:", error.message);
     res.status(500).json({ error: "Failed to fetch products", details: error.message });
@@ -57,11 +74,12 @@ app.post("/api/order", async (req, res) => {
     }
 
     // 🔹 Fetch product details
-    const productResponse = await axios.get(`https://fakestoreapi.com/products/${productId}`);
-    const product = productResponse.data;
-    if (!product) return res.status(404).json({ error: "Product not found" });
+    const productResponse = await axios.get(`${FAKESTORE_API}/${productId}`);
+    if (!productResponse.data) return res.status(404).json({ error: "Product not found" });
 
-    // 🔹 Place order in FakeStoreAPI (simulated cart system)
+    const product = productResponse.data;
+
+    // 🔹 Simulated order placement in FakeStoreAPI
     const supplierOrder = await axios.post("https://fakestoreapi.com/carts", {
       userId,
       date: new Date().toISOString(),
