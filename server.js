@@ -4,64 +4,51 @@ const axios = require("axios");
 const cors = require("cors");
 
 const app = express();
-app.use(cors({ origin: "*" })); // Allow all origins for now
+app.use(cors({ origin: "*" })); // Allow all origins (for now)
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
-const FAKESTORE_API = "https://fakestoreapi.com/products"; // ✅ Base API URL
 
 // ✅ Test Route
 app.get("/", (req, res) => {
   res.send("Backend is running...");
 });
 
-// ✅ Products Route (Fetch all or single product)
-app.get("/api/products", async (req, res) => {
+// ✅ Products Route (Using Fakestore API with 20% profit margin)
+// Use this endpoint: GET /products?q=your_query
+app.get("/products", async (req, res) => {
   try {
-    const { q, id } = req.query;
+    const query = req.query.q || "";
+    
+    // 🔹 Fetch all products from Fakestore API
+    const response = await axios.get("https://fakestoreapi.com/products");
+    let products = response.data; // Expected to be an array
 
-    // 🔹 Fetch all products if no ID is provided
-    if (!id) {
-      const response = await axios.get(FAKESTORE_API);
-      let products = response.data.map((product) => ({
-        id: product.id,
-        title: product.title,
-        price: (parseFloat(product.price) * 1.2).toFixed(2), // ✅ 20% markup
-        image: product.image,
-        category: product.category,
-        description: product.description,
-        link: `${FAKESTORE_API}/${product.id}`, // Direct product link
-      }));
+    // 🔹 Apply a 20% profit margin to each product's price
+    products = products.map((product) => ({
+      id: product.id,
+      title: product.title,
+      price: (parseFloat(product.price) * 1.2).toFixed(2), // 20% markup
+      image: product.image,
+      category: product.category,
+      description: product.description,
+      link: `https://fakestoreapi.com/products/${product.id}` // Direct link (for reference)
+    }));
 
-      // 🔹 Filter products based on search query
-      if (q) {
-        products = products.filter((product) =>
-          product.title.toLowerCase().includes(q.toLowerCase())
-        );
-      }
-
-      return res.json({ success: true, products });
+    // 🔹 If a search query is provided, filter products by title (case-insensitive)
+    if (query) {
+      products = products.filter((product) =>
+        product.title.toLowerCase().includes(query.toLowerCase())
+      );
     }
 
-    // 🔹 Fetch single product by ID
-    const productResponse = await axios.get(`${FAKESTORE_API}/${id}`);
-    if (!productResponse.data) {
-      return res.status(404).json({ success: false, error: "Product not found" });
-    }
-
-    const product = {
-      id: productResponse.data.id,
-      title: productResponse.data.title,
-      price: (parseFloat(productResponse.data.price) * 1.2).toFixed(2), // ✅ 20% markup
-      image: productResponse.data.image,
-      category: productResponse.data.category,
-      description: productResponse.data.description,
-    };
-
-    return res.json({ success: true, product });
+    res.json({ success: true, products });
   } catch (error) {
     console.error("Error fetching products:", error.message);
-    res.status(500).json({ error: "Failed to fetch products", details: error.message });
+    res.status(500).json({
+      error: "Failed to fetch products",
+      details: error.message
+    });
   }
 });
 
@@ -73,25 +60,24 @@ app.post("/api/order", async (req, res) => {
       return res.status(400).json({ error: "Missing order details" });
     }
 
-    // 🔹 Fetch product details
-    const productResponse = await axios.get(`${FAKESTORE_API}/${productId}`);
-    if (!productResponse.data) return res.status(404).json({ error: "Product not found" });
-
+    // 🔹 Fetch product details from Fakestore API
+    const productResponse = await axios.get(`https://fakestoreapi.com/products/${productId}`);
     const product = productResponse.data;
+    if (!product) return res.status(404).json({ error: "Product not found" });
 
-    // 🔹 Simulated order placement in FakeStoreAPI
+    // 🔹 Simulate placing an order on the supplier's website (using Fakestore's carts endpoint)
     const supplierOrder = await axios.post("https://fakestoreapi.com/carts", {
       userId,
       date: new Date().toISOString(),
-      products: [{ productId, quantity }],
+      products: [{ productId, quantity }]
     });
 
-    // 🔹 Calculate total amount with 20% profit
+    // 🔹 Calculate the total amount with 20% profit
     const totalAmount = (parseFloat(product.price) * 1.2 * quantity).toFixed(2);
 
-    // 🔹 Order Response
+    // 🔹 Build the order object to return
     const order = {
-      orderId: supplierOrder.data.id, // Use supplier order ID
+      orderId: supplierOrder.data.id, // Use supplier order ID as our order ID
       userId,
       productId,
       quantity,
@@ -107,7 +93,10 @@ app.post("/api/order", async (req, res) => {
     });
   } catch (error) {
     console.error("Order placement failed:", error.message);
-    res.status(500).json({ error: "Order placement failed", details: error.message });
+    res.status(500).json({
+      error: "Order placement failed",
+      details: error.message
+    });
   }
 });
 
