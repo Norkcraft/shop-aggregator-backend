@@ -9,6 +9,9 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
 
+// 🔹 Store orders temporarily
+let orders = [];
+
 // ✅ Test Route
 app.get("/", (req, res) => {
   res.send("Backend is running...");
@@ -89,41 +92,57 @@ app.get("/products/:id", async (req, res) => {
 // ✅ Order Placement Route (Simulated Purchase)
 app.post("/api/order", async (req, res) => {
   try {
-    const { userId, productId, quantity, shippingAddress } = req.body;
-    if (!userId || !productId || !quantity || !shippingAddress) {
+    const { userId, items, shippingAddress } = req.body;
+    if (!userId || !items || !shippingAddress) {
       return res.status(400).json({ error: "Missing order details" });
     }
 
-    // 🔹 Fetch product details from FakeStore API
-    const productResponse = await axios.get(`https://fakestoreapi.com/products/${productId}`);
-    const product = productResponse.data;
-    if (!product) return res.status(404).json({ error: "Product not found" });
+    let totalAmount = 0;
+    let orderItems = [];
+
+    // 🔹 Fetch product details for each item
+    for (let item of items) {
+      const productResponse = await axios.get(`https://fakestoreapi.com/products/${item.productId}`);
+      const product = productResponse.data;
+
+      if (!product) return res.status(404).json({ error: `Product ${item.productId} not found` });
+
+      const itemTotal = (parseFloat(product.price) * 1.2 * item.quantity).toFixed(2);
+      totalAmount += parseFloat(itemTotal);
+
+      orderItems.push({
+        productId: item.productId,
+        title: product.title,
+        quantity: item.quantity,
+        price: itemTotal,
+        image: product.image
+      });
+    }
 
     // 🔹 Simulate placing an order on the supplier's website
     const supplierOrder = await axios.post("https://fakestoreapi.com/carts", {
       userId,
       date: new Date().toISOString(),
-      products: [{ productId, quantity }]
+      products: items.map(({ productId, quantity }) => ({ productId, quantity }))
     });
 
-    // 🔹 Calculate total amount with 20% profit
-    const totalAmount = (parseFloat(product.price) * 1.2 * quantity).toFixed(2);
-
-    // 🔹 Build the order object
-    const order = {
+    // 🔹 Create order object
+    const newOrder = {
       orderId: supplierOrder.data.id, // Use supplier order ID
       userId,
-      productId,
-      quantity,
-      totalAmount,
-      status: "Processing",
+      items: orderItems,
+      totalAmount: totalAmount.toFixed(2),
+      status: "Processing", // Default status
       shippingAddress,
+      createdAt: new Date().toISOString()
     };
+
+    orders.push(newOrder); // Store order locally
 
     res.status(201).json({
       success: true,
       message: "Order placed successfully!",
-      order,
+      order: newOrder,
     });
   } catch (error) {
     console.error("Order placement failed:", error.message);
@@ -132,6 +151,25 @@ app.post("/api/order", async (req, res) => {
       details: error.message
     });
   }
+});
+
+// ✅ Order Tracking Route
+app.get("/api/order/:id", (req, res) => {
+  const orderId = req.params.id;
+  const order = orders.find(o => o.orderId == orderId);
+
+  if (!order) {
+    return res.status(404).json({ error: "Order not found" });
+  }
+
+  // 🔹 Simulate order status update
+  const statusUpdates = ["Processing", "Shipped", "Out for Delivery", "Delivered"];
+  const currentStatusIndex = statusUpdates.indexOf(order.status);
+  if (currentStatusIndex < statusUpdates.length - 1) {
+    order.status = statusUpdates[currentStatusIndex + 1]; // Move to the next status
+  }
+
+  res.json({ success: true, order });
 });
 
 // ✅ Start Server
